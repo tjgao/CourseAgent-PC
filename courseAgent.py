@@ -1,68 +1,71 @@
-import qrauth, setting, singleinstance 
+import logging, os, json, atexit, shutil
 import cherrypy, multiprocessing, time, hashlib, sys
 from uuid import getnode
+from PIL import Image
+
+logger = logging.getLogger(__name__)
+
 
 class courseAgent:
-    def __init__(self, st):
-        self.users = []
-        self.admin = None
-        self.remote = st.getValue('server','remoteServer')
+    def __init__(self, gconfig):
+        self.cfg = gconfig
+
+    def thumb(self, src):
         try:
-            self.port = int(st.getValue('global','server.socket_host'))
+            sz = gconfig.get('thumb_size','50x50')
+            a,b = sz.split('x')
+            width, height = int(a), int(b) 
         except:
-            self.port = 9503
+            logger.info('Thumb size format wrong, use default value 50x50')
+            width, height = 50, 50
+        dirname = os.path.dirname(src)
+        basename = os.path.basename(src)
+        dst = dirname + os.sep + 'tb_' + basename
+        Image.open(src).thumbnail((width,height)).save(dst)        
+        return dst
+
+    def jsonify(self, **args):
+        return json.dumps(args)
 
     @cherrypy.expose
     def index(self):
-        if self.admin is None:
-            return "courseAgent is alive, but not connected."
-        else:
-            pass
+        pass
 
     @cherrypy.expose
     def takeover(self, token):
         pass
         
 
-def qrauth_proc(pipe, st, ev):
-    m = hashlib.md5()
-    m.update((str(getnode()) + str(time.time())).encode('utf-8'))
-    code = m.hexdigest()
-    q = qrauth.qrAuth(st)
-    q.show(code)
-    auth = q.getAuth()
-    if auth is not None:
-        ev.set()
-        pipe.send(auth)
-    else:
-        pipe.close()
+    @cherrypy.expose
+    def upload(self, token, filename):
+        tk = self.gconfig.get('token')
+        if tk != token:
+            tk = self.gconfig.get('token2')
+            if tk != token:
+                return self.jsonify(code=1, msg='No permission')
 
+        path =  os.path.dirname(os.path.realpath(__file__)) + os.sep + 'upload'
+        if not os.path.exists(path):
+            os.mkdir(path)
+        m = hashlib.md5()
+        ext = ''
+        if '.' in filename:
+            ext = '.' + filename.split('.')[-1]
+        m.update((filename + str(time.time())).encode('utf-8'))
+        dest = path + os.sep + m.hexdigest() + ext
+        with open(dest, 'wb') as f:
+            shutil.copyfileobj(cherrypy.request.body, f)
+        thumb = self.thumb(dest)
+        return self.jsonify(thumb=os.path.basename(thumb), filename=os.path.basename(dest), code=0)
+
+    @cherrypy.expose
+    def project(self, token, filename):
+        tk = self.gconfig.get('token')
+        if tk != token:
+            return self.jsonify(code=1, msg='No permission')
+
+        # start a image viewer to open that picture 
+        return self.jsonify(code=0)
 
 if __name__ == '__main__':
-    single = singleinstance.singleInstance()
-    if single.alreadyRunning():
-        print('Hmm')
-        sys.exit()
-    s = setting.setting() 
-    out_p, in_p= multiprocessing.Pipe()
-    ev = multiprocessing.Event()
-
-    authproc = multiprocessing.Process(target = qrauth_proc, 
-            args = (in_p, s, ev,))
-    authproc.start()
-    authproc.join()
-
-    res = None
-    try:
-        if ev.is_set():
-            res = out_p.recv()
-    except:
-        pass
-    out_p.close()
-    in_p.close()
-    if res is None:  sys.exit() 
-
-    course = courseAgent(s)
-    cherrypy.config.update({'server.socket_port':course.port})
-    cherrypy.quickstart(course)
-
+    pass

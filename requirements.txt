@@ -1,0 +1,4 @@
+wheel
+requests
+cherrypy
+pillow

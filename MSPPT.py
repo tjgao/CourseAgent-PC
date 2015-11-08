@@ -10,12 +10,8 @@ class MSPPT:
         self.ppt = None
         self.DEBUG = True
 
-    def prtDbg(self, msg):
-        if self.DEBUG: print(msg)
-
     def open(self, target):
        #Before we actually open ppt, we try to minimize all other windows
-       #I found it is quite annoying that the ppt window is blocked by other windows
         try:
             sh = win32com.client.Dispatch('Shell.Application')
             sh.minimizeAll();

@@ -1,7 +1,6 @@
 from PIL import Image, ImageTk
 import tkinter as tk
 import ntpath, traceback, sys
-from atlogger import logger
 
 class imgViewer:
     def __init__(self):
