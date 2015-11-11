@@ -52,6 +52,7 @@ def notifyExit(queue):
 
 
 if __name__ == '__main__':
+    DEBUG = True
     single = singleinstance.singleInstance()
     if single.alreadyRunning():
         sys.exit()
@@ -66,16 +67,21 @@ if __name__ == '__main__':
             gconfig.update(dd)
 
     queue = multiprocessing.Queue(-1)
+
     atexit.register(notifyExit, queue)
+
     logging_listener = multiprocessing.Process(target = logging_proc, args=(queue,logging_configurer))
     logging_listener.daemon = True
     logging_listener.start()
 
-
-    authproc = multiprocessing.Process(target = qrauth_proc, 
+    if not DEBUG:
+        authproc = multiprocessing.Process(target = qrauth_proc, 
             args = (queue, worker_configurer, gconfig))
-    authproc.start()
-    authproc.join()
+        authproc.start()
+        authproc.join()
+    else:
+        gconfig['token'] = 'abcdef'
+        gconfig['token2'] = '123456'
 
     
     logger = worker_configurer(queue)
@@ -84,7 +90,21 @@ if __name__ == '__main__':
         logger.info('Window closed or auth failed, exit')
         sys.exit()
 
-    course = courseAgent(gconfig)
-    cherrypy.config.update({'server.socket_port':gconfig.get('port',9503)})
-    cherrypy.quickstart(course)
+    course = courseAgent.courseAgent(gconfig, queue, worker_configurer)
+    filedir = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__))),'files')
+    if not os.path.exists(filedir):
+        os.mkdir(filedir)
+
+    cherrypy.config.update({
+        'server.socket_port':gconfig.get('port',9503), 
+        'tools.sessions.on':True,
+        'tools.sessions.locking':'explicit',
+    })
+    conf = {
+        '/files':{
+            'tools.staticdir.on':True,
+            'tools.staticdir.dir':filedir
+        }
+    }
+    cherrypy.quickstart(course, config=conf)
 

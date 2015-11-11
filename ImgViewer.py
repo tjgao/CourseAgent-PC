@@ -1,6 +1,7 @@
 from PIL import Image, ImageTk
 import tkinter as tk
 import ntpath, traceback, sys
+import qrcode
 
 class imgViewer:
     def __init__(self):
@@ -35,8 +36,16 @@ class imgViewer:
         try:
             if self.viewer is None:
                 self.viewer = tk.Tk()
+            self.viewer.protocol('WM_CLOSE', self.close)
+            self.viewer.attributes('-alpha', 0)
             self.viewer.lift()
             self.viewer.state('zoomed')
+            self.viewer.update()
+            win_width = self.viewer.winfo_screenwidth()
+            win_height = self.viewer.winfo_screenheight()
+            self.viewer.geometry(str(win_width) + 'x' + str(win_height))
+            self.viewer.attributes('-alpha', 1)
+            self.viewer.resizable(0,0)
             if self.container is None:
                 self.container = tk.Canvas(self.viewer, bg = 'grey')
             self.container.pack(side='top', fill='both', expand=True)
@@ -54,10 +63,18 @@ class imgViewer:
             img = ImageTk.PhotoImage(im)
             self.container.image = img
             self.container.create_image(w/2, h/2, anchor='center', image = img, tags = 'bg_img')
-            self.viewer.title('courseAgent - ' + title)
+            self.viewer.title(title)
             self.loop()
         except Exception as e: 
-            logger.exception(e)
+            print(e)
+            pass
+
+    def open2(self, code, title=''):
+        qr = qrcode.QRCode(version=6)
+        qr.add_data(code)
+        qr.make()
+        img = qr.make_image()
+        self.open(img, title)
 
     def close(self):
         if self.container is not None:
@@ -73,7 +90,22 @@ class imgViewer:
                 pass
         self.viewer = None
 
+
+
 if __name__ == '__main__':
-    i = imgViewer()
-    i.openfile('d:\\code\\qr.png','LOL')
+    import sys
+    if len(sys.argv) < 2: 
+        print('''
+        Usage: 
+            <program> -f filename title
+            <program> -q string title
+            ''')
+        sys.exit()
+    if sys.argv[1] in ['-f', '-q']:
+        if sys.argv[1] == '-f':
+            i = imgViewer()
+            i.openfile(sys.argv[2],sys.argv[3])
+        else:
+            i = imgViewer()
+            i.open2(sys.argv[2], sys.argv[3])
 
