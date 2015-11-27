@@ -23,7 +23,7 @@ class qrAuth(imgViewer):
             self.logger.info('Exception occurs when requesting QR auth')
             return False
 
-    def waitConfirm(self, cycle, code):
+    def waitConfirm(self, cycle, code, count=-1):
         server = self.cfg.get('server')
         url = server + '/api/qr/wait/' + code
         self.logger.info('Wait for confirmation.')
@@ -46,7 +46,10 @@ class qrAuth(imgViewer):
             except Exception as e:
                 self.logger.info('Exception occurs when waiting for confirmation')
                 self.logger.info(e)
+            if count == 0: break
+            else: count = count - 1
             time.sleep(cycle)
+            
 
     def show(self, code, title=''):
         if not self.reqAuth(code):
@@ -54,11 +57,12 @@ class qrAuth(imgViewer):
             return
         self.logger.info('Successfully create QR Auth!')
         qr = qrcode.QRCode(version=6)
-        qr.add_data(code)
+        qr.add_data('activate:' + code)
         qr.make()
         img = qr.make_image()
         secs = self.cfg.get('auth_refreshrate',2)
-        t = Thread(target=self.waitConfirm, args=(secs,code,))
+        wait = self.cfg.get('waitconfirm',60)
+        t = Thread(target=self.waitConfirm, args=(secs,code,wait,))
         t.daemon = True
         t.start()
         self.open(img,'请扫描二维码登入')

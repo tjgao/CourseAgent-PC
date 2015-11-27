@@ -1,5 +1,5 @@
 import logging, os, json, atexit, shutil
-import cherrypy, multiprocessing, time, hashlib, sys, enum
+import cherrypy, multiprocessing, time, hashlib, sys, enum, requests
 import ImgViewer, win32gui, win32con, logging, subprocess
 from uuid import getnode
 from PIL import Image
@@ -33,6 +33,7 @@ class qulet:
 
 class courseAgent:
     def __init__(self, gconfig, queue, configurer):
+        self._user = {}
         self.gconfig = gconfig
         self.longpoll = self.gconfig.get('longpoll',10)
         self.queue = queue
@@ -65,92 +66,108 @@ class courseAgent:
         except:
             return False
 
-    def notifyChange(self, s, fn):
+    def notifyChange(self, fn):
         d = dict()
         d['filename'] = fn
         item = qulet(QTYPE.SHOWUP, d)
-        for i, session in s.cache.items():
-            session[0].get('queue').put_nowait(item)
+        for i in self._user:
+            self._user[i].get('queue').put_nowait(item)
 
+    def checktoken(self):
+        return 1,2
+        uid = cherrypy.request.headers.get('id')
+        tok = cherrypy.request.headers.get('token')
+        if id is None: return None
+        if self._user.get(uid) is None: return None
+        if tok == gconfig.get('token'): return uid, 2
+        elif tok == gconfig.get('token2'): return uid, 1
+        return None
 
     @cherrypy.expose
     def index(self):
         return 'I am alive, ready to go.'
 
+    @cherrypy.expose
+    def alive(self):
+        return self.jsonify(code=0)
+
 
     @cherrypy.expose
     def gameover(self):
         item = qulet(QTYPE.GAMEOVER)
-        for i, session in cherrypy.session.cache.items():
-            session[0].get('queue').put_nowait(item)
+        for i in self._user:
+            self._user[i].get('queue').put_nowait(item)
         time.sleep(1)
         cherrypy.engine.exit()
 
     @cherrypy.expose
-    def register(self, token, uid, uname, nickname):
-        tk = self.gconfig.get('token')
-        if tk != token:
-            tk = self.gconfig.get('token2')
-            if tk != token:
-                return self.jsonify(code=1, msg='No permission')
-            else:
-                cherrypy.session['admin'] = False
-        else:
-            cherrypy.session['admin'] = True
-        cherrypy.session['uid'] = uid
-        cherrypy.session['uname'] = uname
-        cherrypy.session['nickname'] = nickname
-        cherrypy.session['token'] = token
-        cherrypy.session['queue'] = Queue()
+    def register(self, uname, nickname, headimg = None):
+        ret = self.checktoken()
+        if ret is None: return self.jsonify(code=1)
+        uid, rank = ret
+        self._user[uid] = {} 
+        self._user[uid]['uid'] = uid
+        self._user[uid]['uname'] = uname
+        self._user[uid]['nickname'] = nickname
+        self._user[uid]['queue'] = Queue()
+        self._user[uid]['rank'] = rank
         return self.jsonify(code=0)
 
     @cherrypy.expose
     def chat(self, msg):
-        if not cherrypy.session.get('uid'): return self.jsonify(code=1, msg='No Permission')
+        ret = self.checktoken()
+        if ret is None: return self.jsonify(code=1)
         d = dict()
-        d['uname'] = cherrypy.session.get('uname')
-        d['nickname'] = cherrypy.session.get('nickname')
-        d['uid'] = cherrypy.session.get('uid')
-        d['msg'] = msg
+        uid, rank = ret
+        d['uname'] = self._user[uid].get('uname')
+        d['nickname'] = self._user[uid].get('nickname')
+        d['uid'] = self._user[uid].get('uid')
+        d['headimg'] = self._user[uid].get('headimg')
+        d['text'] = msg
         item = qulet(QTYPE.CHATMSG, d)
-        for i, session in cherrypy.session.cache.items():
-            session[0].get('queue').put_nowait(item)
+        for i in self._user:
+            self._user[i].get('queue').put_nowait(item)
         return self.jsonify(code=0)
 
     @cherrypy.expose
     def watch(self):
-        if not cherrypy.session.get('uid') or not cherrypy.session.get('queue'): 
-            return self.jsonify(code=1, msg='No Permission')
-        q = cherrypy.session.get('queue')
+        ret = self.checktoken()
+        if ret is None: return self.jsonify(code=1)
+        q = self._user[ret.uid].get('queue')
         item = q.get(True, self.longpoll)
         return str(item)
         
         
 
     @cherrypy.expose
-    def currentslide(self):
-        if not cherrypy.session.get('uid'):
-            return self.jsonify(code=1, msg='No permission')
+    def currentview(self):
+        ret = self.checktoken()
+        if ret is None: return self.jsonify(code=1)
         if self.ppt and self.ppt.opened():
             return self.jsonify(idx=self.ppt.curslide(), code=0)
         return self.jsonify(code=1, msg='Powerpoint is not running')
 
     @cherrypy.expose
     def raisehand(self, filename):
-        if not cherrypy.session.get('uid'): return self.jsonify(code=1, msg='No Permission')
+        ret = self.checktoken()
+        if ret is None: return self.jsonify(code=1)
+        uid, rank = ret
         d = dict()
-        d['uname'] = cherrypy.session.get('uname')
-        d['nickname'] = cherrypy.session.get('nickname')
-        d['uid'] = cherrypy.session.get('uid')
+        d['uname'] = self._user[uid].get('uname')
+        d['nickname'] = self._user[uid].get('nickname')
+        d['uid'] = self._user[uid].get('uid')
+        d['headimg'] = self._user[uid].get('headimg')
         d['filename'] = filename
+        d['text'] = '举手申请展示图片。'
         item = qulet(QTYPE.RAISEHAND, d)
-        for i, session in cherrypy.session.cache.items():
-            session[0].get('queue').put_nowait(item)
+        for i in self._user:
+            self._user[i].get('queue').put_nowait(item)
         return self.jsonify(code=0)
 
     @cherrypy.expose
     def closeviewer(self):
-        if not cherrypy.session.get('admin'):
+        ret = self.checktoken() 
+        if ret is None or ret.rank < 2:
             return self.jsonify(code=1, msg='No permission')
         self._closewindow(viewer_title)
         self._closewindow(attend_title)
@@ -158,15 +175,29 @@ class courseAgent:
         
     @cherrypy.expose
     def showattend(self, attendstr):
-        if not cherrypy.session.get('admin'):
+        ret = self.checktoken() 
+        if ret is None or ret.rank < 2:
             return self.jsonify(code=1, msg='No permission')
         self._closewindow(attend_title) 
         subprocess.Popen(['python','ImgViewer.py','-q',attendstr,viewer_title],creationflags=DETACHED_PROCESS,close_fds=True) 
         return self.jsonify(code=0)
 
     @cherrypy.expose
+    def permitshow(self, filename):
+        ret = self.checktoken() 
+        if ret is None or ret.rank < 2:
+            return self.jsonify(code=1, msg='No permission')
+        path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__))),'files')
+        if filename.endswith('.pptx') or filename.endswith('.ppt'):
+            self._curppt = path + os.sep + filename
+        else:
+            self._curpic = path + os.sep + filename
+        return self.jsonify(code=0)
+
+    @cherrypy.expose
     def upload(self,filename):
-        if not cherrypy.session.get('uid'):
+        ret = self.checktoken() 
+        if ret is None:
             return self.jsonify(code=1, msg='No permission')
 
         path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__))),'files')
@@ -180,51 +211,78 @@ class courseAgent:
         dest = path + os.sep + m.hexdigest() + ext.lower()
         with open(dest, 'wb') as f:
             shutil.copyfileobj(cherrypy.request.body, f)
-        if ext.lower() in ['.jpg','.png','.gif','.bmp']:
+        if ext.lower() in ['.jpg','.png','.gif','.bmp','.jpeg']:
             thumb = self.thumb(dest)
             return self.jsonify(thumb=os.path.basename(thumb), filename=os.path.basename(dest), code=0)
-        else:
+        elif ext.lower() in ['.ppt','.pptx']:
+            self._curppt = dest
             return self.jsonify(filename = os.path.basename(dest), code=0)
+        else:
+            return self.jsonify(code=1, msg='只能上传图片或者Powerpoint文件！')
 
     @cherrypy.expose
-    def openppt(self, filename):
-        if not cherrypy.session.get('admin'):
+    def downloadppt(self, url):
+        ret = self.checktoken() 
+        if ret is None or ret.rank < 2:
+            return self.jsonify(code=1, msg='No permission')
+        fn = url.split('/')[-1]
+        path =  os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__))),'files')
+        fn = path + os.sep + fn 
+        r = requests.get(url, stream=True)
+        with open(fn, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=1024):
+                if chunk: f.write(chunk)
+        self._curppt = fn
+        return self.jsonify(code=0)
+
+    @cherrypy.expose
+    def openppt(self, filename = None):
+        ret = self.checktoken() 
+        if ret is None or ret.rank < 2:
             return self.jsonify(code=1, msg='No permission')
         if self.ppt:
             if self.ppt.opened():
                 self.ppt.close()
         else:
             self.ppt = MSPPT()
+        if filename is None and self._curppt is None:
+            return self.jsonify(code=1, msg='尚未指定Powerpoint文件！')
+        elif self._curppt is not None: self._curppt = filename
         path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__))),'files')
-        self.ppt.open(path + os.sep + filename)
+        self.ppt.open(path + os.sep + self._curppt)
         if not os.path.exists(path):
             os.mkdir(path)
         self.ppt.makepics( path ) 
         # slide's name is 1.png,2.png,....
-        self.notifyChange(cherrypy.session, 'files' + os.sep + self.ppt.curslide() + '.png')
+        self.notifyChange('files' + os.sep + self.ppt.curslide() + '.png')
         return self.jsonify(code=0) 
 
     @cherrypy.expose
     def ppt_next(self):
-        if not cherrypy.session.get('admin'):
+        ret = self.checktoken() 
+        if ret is None or ret.rank < 2:
             return self.jsonify(code=1, msg='No permission')
+
         if self.ppt and self.ppt.opened():
             self.ppt.next()
-            self.notifyChange(cherrypy.session, 'files' + os.sep + self.ppt.curslide() + '.png')
+            self.notifyChange('files' + os.sep + self.ppt.curslide() + '.png')
         return self.jsonify(code=0)
 
     @cherrypy.expose
     def ppt_prev(self):
-        if not cherrypy.session.get('admin'):
+        ret = self.checktoken() 
+        if ret is None or ret.rank < 2:
             return self.jsonify(code=1, msg='No permission')
+
         if self.ppt and self.ppt.opened():
             self.ppt.prev()
-            self.notifyChange(cherrypy.session, 'files' + os.sep + self.ppt.curslide() + '.png')
+            self.notifyChange('files' + os.sep + self.ppt.curslide() + '.png')
         return self.jsonify(code=0)
 
     @cherrypy.expose
     def ppt_pages(self):
-        if not cherrypy.session.get('admin'):
+        ret = self.checktoken() 
+        if ret is None or ret.rank < 2:
             return self.jsonify(code=1, msg='No permission')
         if self.ppt and self.ppt.opened():
             return self.jsonify(code=0, data=self.ppt.pages())
@@ -232,35 +290,39 @@ class courseAgent:
 
     @cherrypy.expose
     def ppt_goto(self, page):
-        if not cherrypy.session.get('admin'):
+        ret = self.checktoken() 
+        if ret is None or ret.rank < 2:
             return self.jsonify(code=1, msg='No permission')
         if self.ppt and self.ppt.opened():
             self.ppt.goto(page)
-            self.notifyChange(cherrypy.session, 'files' + os.sep + self.ppt.curslide() + '.png')
+            self.notifyChange('files' + os.sep + self.ppt.curslide() + '.png')
         return self.jsonify(code=0)
 
 
     @cherrypy.expose
     def ppt_first(self):
-        if not cherrypy.session.get('admin'):
+        ret = self.checktoken() 
+        if ret is None or ret.rank < 2:
             return self.jsonify(code=1, msg='No permission')
         if self.ppt and self.ppt.opened():
             self.ppt.first()
-            self.notifyChange(cherrypy.session, 'files' + os.sep + self.ppt.curslide() + '.png')
+            self.notifyChange('files' + os.sep + self.ppt.curslide() + '.png')
         return self.jsonify(code=0)
 
     @cherrypy.expose
     def ppt_last(self):
-        if not cherrypy.session.get('admin'):
+        ret = self.checktoken() 
+        if ret is None or ret.rank < 2:
             return self.jsonify(code=1, msg='No permission')
         if self.ppt and self.ppt.opened():
             self.ppt.last()
-            self.notifyChange(cherrypy.session, 'files' + os.sep + self.ppt.curslide() + '.png')
+            self.notifyChange('files' + os.sep + self.ppt.curslide() + '.png')
         return self.jsonify(code=0)
         
     @cherrypy.expose
     def show(self, filename):
-        if not cherrypy.session.get('admin'):
+        ret = self.checktoken() 
+        if ret is None or ret.rank < 2:
             return self.jsonify(code=1, msg='No permission')
 
         # start a image viewer to open the picture 

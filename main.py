@@ -1,6 +1,6 @@
 import logging, os, json, atexit, shutil
 import qrauth, singleinstance, courseAgent 
-import cherrypy, multiprocessing, time, hashlib, sys, threading
+import cherrypy, multiprocessing, time, hashlib, sys, threading, requests
 from uuid import getnode
 from QueueHandler import QueueHandler
 
@@ -47,12 +47,23 @@ def worker_configurer(queue):
     return root
 
 
+def getserver():
+    url = 'https://raw.githubusercontent.com/tjgao/SpringBoard/master/server.json'
+    r = requests.get(url)
+    try:
+        j = r.json()
+        return j.get('server')
+    except:
+        print('should not happen');
+        pass
+
 def notifyExit(queue):
     queue.put_nowait(None)
 
 
 if __name__ == '__main__':
-    DEBUG = True
+    DEBUG = True 
+    #DEBUG = False 
     single = singleinstance.singleInstance()
     if single.alreadyRunning():
         sys.exit()
@@ -65,6 +76,10 @@ if __name__ == '__main__':
         with open(cfgjson) as f:
             dd = json.loads(f.read())
             gconfig.update(dd)
+
+    tmp = gconfig.get('server')
+    if tmp is None or len(tmp) == 0:
+        gconfig['server'] = getserver()
 
     queue = multiprocessing.Queue(-1)
 
@@ -96,9 +111,10 @@ if __name__ == '__main__':
         os.mkdir(filedir)
 
     cherrypy.config.update({
-        'server.socket_port':gconfig.get('port',9503), 
-        'tools.sessions.on':True,
-        'tools.sessions.locking':'explicit',
+        'server.socket_host': '0.0.0.0',
+        'server.socket_port':gconfig.get('port',9503)
+        #        'tools.sessions.on':True,
+        #        'tools.sessions.locking':'explicit',
     })
     conf = {
         '/files':{

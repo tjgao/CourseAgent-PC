@@ -2,6 +2,7 @@
     "server":"http://192.168.11.100:8080/CourseAssist",
     "port":9503,
     "auth_refreshrate":1,
+    "waitconfirm":60,
     "thumb_size":"50x50",
     "longpoll":10
 }
