@@ -46,7 +46,9 @@ class qrAuth(imgViewer):
             except Exception as e:
                 self.logger.info('Exception occurs when waiting for confirmation')
                 self.logger.info(e)
-            if count == 0: break
+            if count == 0: 
+                self.running = False
+                break
             else: count = count - 1
             time.sleep(cycle)
             

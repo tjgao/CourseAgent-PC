@@ -1,7 +1,7 @@
 from PIL import Image, ImageTk
 import tkinter as tk
 import ntpath, traceback, sys
-import qrcode
+import qrcode, win32com.client
 
 class imgViewer:
     def __init__(self):
@@ -32,10 +32,15 @@ class imgViewer:
             except:
                 pass
 
+    def title(self, t):
+        if self.viewer: self.viewer.title(t)
+
     def open(self, im, title):
         try:
             if self.viewer is None:
                 self.viewer = tk.Tk()
+            sh = win32com.client.Dispatch('Shell.Application')
+            sh.minimizeAll();
             self.viewer.protocol('WM_CLOSE', self.close)
             self.viewer.attributes('-alpha', 0)
             self.viewer.lift()
@@ -65,6 +70,7 @@ class imgViewer:
             self.container.create_image(w/2, h/2, anchor='center', image = img, tags = 'bg_img')
             self.viewer.title(title)
             self.loop()
+            sh.UndoMinimizeAll()
         except Exception as e: 
             print(e)
             pass

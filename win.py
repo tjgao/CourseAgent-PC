@@ -1,5 +1,5 @@
 import win32api, win32gui, win32con
-import logging
+import win32com.client, logging
 
 class win:
     def __init__(self, logger = None):
@@ -58,8 +58,14 @@ class win:
         if self.hwnd:
             win32gui.SetActiveWindow(self.hwnd)
 
+    def setfocus(self):
+        if self.hwnd:
+            win32gui.SetFocus(self.hwnd)
+
     def foreground(self):
         if self.hwnd:
+            shell = win32com.client.Dispatch("WScript.Shell")
+            shell.SendKeys('%')
             win32gui.SetForegroundWindow(self.hwnd)
 
     def maximize(self):
@@ -90,7 +96,7 @@ class win:
 if __name__ == '__main__':
     import time
     w = win()
-    w.wildfind('PowerPoint')
+    w.wildfind('_._ 图片查看 _._')
     if w.valid():
         w.activate()
         w.foreground()

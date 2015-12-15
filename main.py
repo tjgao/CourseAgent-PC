@@ -1,4 +1,4 @@
-import logging, os, json, atexit, shutil
+import logging, os, json, atexit, shutil, pythoncom
 import qrauth, singleinstance, courseAgent 
 import cherrypy, multiprocessing, time, hashlib, sys, threading, requests
 from uuid import getnode
@@ -61,9 +61,14 @@ def notifyExit(queue):
     queue.put_nowait(None)
 
 
+def onThreadStart(threadIndex):
+  pythoncom.CoInitialize()
+
+
+
 if __name__ == '__main__':
-    DEBUG = True 
-    #DEBUG = False 
+    #DEBUG = True 
+    DEBUG = False 
     single = singleinstance.singleInstance()
     if single.alreadyRunning():
         sys.exit()
@@ -110,7 +115,10 @@ if __name__ == '__main__':
     if not os.path.exists(filedir):
         os.mkdir(filedir)
 
+    cherrypy.engine.subscribe('start_thread', onThreadStart)
+
     cherrypy.config.update({
+        'server.thread_pool': 100,
         'server.socket_host': '0.0.0.0',
         'server.socket_port':gconfig.get('port',9503)
         #        'tools.sessions.on':True,
