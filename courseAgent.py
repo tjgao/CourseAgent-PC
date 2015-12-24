@@ -120,8 +120,9 @@ class courseAgent:
         if filename:
             self._curpic = filename
         if self._curpic is None: return
-        path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__))),'files')
-        subprocess.Popen(['python','ImgViewer.py','-f',path + os.sep + self._curpic,viewer_title],creationflags=DETACHED_PROCESS,close_fds=True) 
+        path0 = os.path.abspath(os.path.join(os.path.dirname(__file__)))
+        path = os.path.join(path0,'files')
+        subprocess.Popen(['python', path0 + os.sep + 'ImgViewer.py','-f',path + os.sep + self._curpic,viewer_title],creationflags=DETACHED_PROCESS,close_fds=True) 
         time.sleep(1)
         self._broadcast()
 
@@ -209,7 +210,7 @@ class courseAgent:
         #        for i in self._user:
         #            self._user[i].get('queue').put_nowait(item)
         #        time.sleep(1)
-        print('For test, I am not really shutting down')
+        #print('For test, I am not really shutting down')
         return self.jsonify(code=0)
         cherrypy.engine.exit()
         os.system('shutdown /s /t 0')
@@ -355,7 +356,8 @@ class courseAgent:
         self._closewindow(viewer_title)
         if self._closewindow(attend_title):
             return self.jsonify(code=0)
-        subprocess.Popen(['python','ImgViewer.py','-q',attendstr,attend_title],creationflags=DETACHED_PROCESS,close_fds=True) 
+        path = os.path.abspath(os.path.join(os.path.dirname(__file__)))
+        subprocess.Popen(['python', path + os.sep + 'ImgViewer.py','-q',attendstr,attend_title],creationflags=DETACHED_PROCESS,close_fds=True) 
         return self.jsonify(code=0)
 
     @cherrypy.expose
