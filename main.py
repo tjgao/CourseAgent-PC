@@ -65,6 +65,13 @@ def onThreadStart(threadIndex):
   pythoncom.CoInitialize()
 
 
+def cleardir(directory):
+    fl = os.listdir(directory)
+    for f in fl:
+        try:
+            os.remove(directory + os.sep + f)
+        except:
+            shutil.rmtree(directory + os.sep + f)
 
 if __name__ == '__main__':
     #DEBUG = True 
@@ -94,6 +101,13 @@ if __name__ == '__main__':
     logging_listener.daemon = True
     logging_listener.start()
 
+    course = courseAgent.courseAgent(gconfig, queue, worker_configurer)
+    filedir = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__))),'files')
+    if not os.path.exists(filedir):
+        os.mkdir(filedir)
+    else:
+        cleardir(filedir)
+
     if not DEBUG:
         authproc = multiprocessing.Process(target = qrauth_proc, 
             args = (queue, worker_configurer, gconfig))
@@ -110,10 +124,6 @@ if __name__ == '__main__':
         logger.info('Window closed or auth failed, exit')
         sys.exit()
 
-    course = courseAgent.courseAgent(gconfig, queue, worker_configurer)
-    filedir = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__))),'files')
-    if not os.path.exists(filedir):
-        os.mkdir(filedir)
 
     cherrypy.engine.subscribe('start_thread', onThreadStart)
 

@@ -1,4 +1,4 @@
-import win32api, win32gui, win32con
+import win32api, win32gui, win32con, time
 import win32com.client, logging
 
 class win:
@@ -62,11 +62,20 @@ class win:
         if self.hwnd:
             win32gui.SetFocus(self.hwnd)
 
+    def pptforeground(self):
+        temp = win32gui.GetWindowText (win32gui.GetForegroundWindow())
+        if 'PowerPoint' in temp: return True
+        return False
+
     def foreground(self):
+        trytimes = 3
         if self.hwnd:
             shell = win32com.client.Dispatch("WScript.Shell")
             shell.SendKeys('%')
             win32gui.SetForegroundWindow(self.hwnd)
+            while not self.pptforeground() and trytimes > 0:
+                time.sleep(0.2)
+                win32gui.SetForegroundWindow(self.hwnd)
 
     def maximize(self):
         if self.hwnd:

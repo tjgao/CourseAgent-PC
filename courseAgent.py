@@ -114,9 +114,26 @@ class courseAgent:
         #print( uid, self._user[uid]['rank'])
         return uid, self._user[uid]['rank']
 
-    def _openpic(self, filename=None):
-        self._closewindow(viewer_title) 
+    def _closeall(self):
+        self._closewindow(viewer_title)
         self._closewindow(attend_title)
+        if self.ppt:
+            self.ppt.close()
+
+    @cherrypy.expose
+    def openremotefile(self, filename):
+        ret = self.checktoken() 
+        if ret is None or ret[1] < 2:
+            return self.jsonify(code=1, msg='No permission')
+        self._closeall()
+        if filename.lower().endswith('.pptx') or filename.lower().endswith('.ppt'):
+            self._openppt(filename)
+        else:
+            self._openpic(filename)
+        return self.jsonify(code=0);
+
+    def _openpic(self, filename=None):
+        self._closeall()
         if filename:
             self._curpic = filename
         if self._curpic is None: return
@@ -127,6 +144,7 @@ class courseAgent:
         self._broadcast()
 
     def _openppt(self, filename=None):
+        self._closeall()
         if filename :
             self._curppt = filename
         if self._curppt is None: return
@@ -373,6 +391,59 @@ class courseAgent:
         return self.jsonify(code=0)
 
     @cherrypy.expose
+    def closeall(self):
+        ret = self.checktoken() 
+        if ret is None: return self.jsonify(code=1, msg='No permission')
+        self._closeall()
+        return self.jsonify(code=0)
+
+    @cherrypy.expose
+    def listfiles(self, t ):
+        ret = self.checktoken()
+        if ret is None or ret[1] < 2:
+            return self.jsonify(code=1, msg='No permission')
+        path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__))),'files')
+        fl = os.listdir(path)
+        results = []
+        imagetype = ['.jpg','.png','.gif','.bmp','jpeg']
+        for f in fl:
+            if f.startswith(t):
+                d = {}
+                d['time'] = os.path.getctime(path+os.sep+f)
+                d['user'] = f.split('_')[2]
+                d['filename'] = f
+                if f.lower().endswith('.pptx') or f.lower().endswith('ppt'): d['type'] = 'ppt'
+                elif f.lower()[-4:] in imagetype: d['type'] = 'image'
+                else: continue
+                results.append(d)
+        results = list(reversed(sorted(results, key=lambda x:x['time'])))
+        return self.jsonify(code=0, data=results)
+
+
+    @cherrypy.expose
+    def uphand(self, file, name, ext, username):
+        ret = self.checktoken()
+        if ret is None:
+            return self.jsonify(code=1, msg='No permission')
+
+        if ext.lower() not in ['.jpg','.png','.gif','.bmp','.jpeg']:
+            return self.jsonify(code=1, msg='File type not supported')
+
+        path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__))),'files')
+        m = hashlib.md5()
+        m.update((username + name + str(time.time())).encode('utf-8'))
+        dest = path + os.sep + '_uphand_' + username + '_' + m.hexdigest() + ext.lower()
+        with open(dest, 'wb') as f:
+            while True:
+                data = file.file.read(8192)
+                if not data: break
+                f.write(data)
+        thumb = self.thumb(dest)
+        self.reduceSize(dest)
+        return self.jsonify(thumb=os.path.basename(thumb), filename=os.path.basename(dest),code=0)
+
+
+    @cherrypy.expose
     def upload(self, file, name, ext):
         ret = self.checktoken() 
         if ret is None:
@@ -381,7 +452,7 @@ class courseAgent:
         path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__))),'files')
         m = hashlib.md5()
         m.update((name + str(time.time())).encode('utf-8'))
-        dest = path + os.sep + m.hexdigest() + ext.lower()
+        dest = path + os.sep + '_upload__' + m.hexdigest() + ext.lower()
         with open(dest, 'wb') as f:
             while True:
                 data = file.file.read(8192)
@@ -409,16 +480,23 @@ class courseAgent:
         ret = self.checktoken() 
         if ret is None or ret[1] < 2:
             return self.jsonify(code=1, msg='No permission')
-        fn = url.split('/')[-1]
+        #fn = url.split('/')[-1]
         path =  os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__))),'files')
-        fpath = path + os.sep + fn 
+        #fpath = path + os.sep + fn 
         url = self.gconfig.get('server') + '/' + url 
         r = requests.get(url, stream=True)
         if r.status_code != 200:
             return self.jsonify(code=1, msg="无法从指定地址下载！")
-        with open(fpath, 'wb') as f:
+        m = hashlib.md5()
+        m.update((url+'@').encode('utf-8'))
+        fn = '_upload__' + m.hexdigest()
+        if url.lower().endswith('.pptx'): fn += '.pptx'
+        elif url.lower().endswith('.ppt'): fn += '.ppt'
+        else: return self.jsonify(code=1,msg='Not supported file type')
+        dest = path + os.sep + fn
+        with open(dest, 'wb') as f:
             r.raw.decode_content = True
-            shutil.copyfileobj(r.raw,f)
+            shutil.copyfileobj(r.raw, f)
             #for chunk in r.iter_content(chunk_size=1024):
             #    if chunk: f.write(chunk)
         self._openppt(fn)
