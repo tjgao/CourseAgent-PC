@@ -1,5 +1,5 @@
 {
-    "server":"http://192.168.11.100:8080/CourseAssist",
+    "server":"http://sacclass.com",
     "port":9503,
     "auth_refreshrate":1,
     "waitconfirm":60,

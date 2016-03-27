@@ -128,7 +128,8 @@ if __name__ == '__main__':
     cherrypy.engine.subscribe('start_thread', onThreadStart)
 
     cherrypy.config.update({
-        'server.thread_pool': 100,
+        'server.thread_pool': 40,
+        'server.thread_pool_max': -1,
         'server.socket_host': '0.0.0.0',
         'server.socket_port':gconfig.get('port',9503)
         #        'tools.sessions.on':True,

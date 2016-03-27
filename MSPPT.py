@@ -57,7 +57,8 @@ class MSPPT:
             #sh.minimizeAll();
             self.app = win32com.client.Dispatch('PowerPoint.Application')
             self.app.Visible = True
-            self.app.WindowState =  win32com.client.constants.ppWindowMaximized
+            #self.app.WindowState =  win32com.client.constants.ppWindowMaximized
+            self.app.WindowState = 3
             self.app.Activate()
             self.ppt = self.app.Presentations.Open(FileName = target, ReadOnly = True)
             self.pages = len(self.ppt.Slides)

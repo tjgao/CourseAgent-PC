@@ -10,6 +10,7 @@ ws = win32com.client.Dispatch('wscript.shell')
 scut = ws.CreateShortcut(desktop + os.sep + 'SACS.lnk')
 scut.TargetPath = '"pythonw.exe"'
 scut.Arguments = path + os.sep + 'main.py'
+scut.WorkingDirectory = path
 scut.Save()
 
 
